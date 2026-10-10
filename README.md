@@ -107,3 +107,31 @@ python -m pytest -q
 ```
 
 See [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) for the full system explanation, technology choices, module breakdown, technical viability, upgrade roadmap, demo flow, and viva questions.
+
+
+## MotionScore Edge — STM32 + LM35
+
+The repository now includes a first embedded telemetry milestone for the **NUCLEO-F446RE** board and an LM35 analog temperature sensor. Select **STM32 Live Telemetry** in the dashboard sidebar to capture serial data from the ST-LINK virtual COM port.
+
+This mode reports actual sensor temperature, deviation from a manually selected reference temperature, a time plot, sensor/ADC details, and a CSV download. It does **not** run the simulation-trained Random Forest on the temperature data; that model has not been validated for this different source and feature domain.
+
+### Hardware mapping
+
+- LM35 +Vs → NUCLEO-F446RE +5V (LM35 supply starts at 4 V according to its datasheet)
+- LM35 Vout → Arduino A0 / PA0 / ADC1_IN0
+- LM35 GND → board GND
+- USB cable → board ST-LINK USB connector, for power, flashing and virtual COM serial
+
+You will need three safe jumper-wire connections; with only a USB cable, the sensor cannot be connected electrically. Confirm the exact LM35 package pinout before powering the circuit.
+
+### Firmware
+
+CubeIDE integration instructions and source files are in [embedded/stm32_f446re](embedded/stm32_f446re). Configure ADC1 channel 0 on PA0 and USART2 at 115200 baud (PA2 TX / PA3 RX). Firmware emits ASCII lines using this protocol:
+
+```text
+MS1,<time_ms>,<adc_raw>
+```
+
+The Python side converts the 12-bit ADC count using an adjustable ADC-reference estimate, then applies the LM35 nominal 10 mV/°C transfer scale. Calibrate reference voltage to improve accuracy.
+
+See [MotionScore Edge integration guide](embedded/stm32_f446re/USER_CODE_INTEGRATION.md) for wiring, CubeMX settings, firmware integration, and scope/limitations.
