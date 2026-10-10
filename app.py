@@ -7,6 +7,7 @@ import streamlit as st
 from motionscore.simulation import simulate_response
 from motionscore.features import extract_features, FEATURE_COLUMNS
 from motionscore.modeling import MODEL_PATH
+from motionscore.serial_telemetry import capture_telemetry
 
 st.set_page_config(
     page_title="MotionScore | Steady-State Intelligence",
@@ -118,6 +119,152 @@ st.markdown("""
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Select the runtime data source before requiring the simulation model.
+with st.sidebar:
+    st.markdown("### ◈ Operating mode")
+    operating_mode = st.radio(
+        "Choose data source",
+        ["Simulation Lab", "STM32 Live Telemetry"],
+        index=0,
+    )
+
+if operating_mode == "STM32 Live Telemetry":
+    st.markdown("""
+    <div class="glass">
+      <div class="eyebrow">MotionScore Edge / Hardware telemetry</div>
+      <h2 style="margin:0">Live LM35 Temperature Monitor</h2>
+      <p class="hero-sub">Capture real ADC readings from your NUCLEO-F446RE over its ST-LINK virtual COM port. This mode shows measured temperature and difference from a reference setpoint; it does not claim closed-loop temperature control or ML prediction.</p>
+      <div class="pill-row">
+        <span class="pill">NUCLEO-F446RE</span>
+        <span class="pill">LM35 → PA0 / ADC1_IN0</span>
+        <span class="pill">USART2 · 115200 BAUD</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.sidebar:
+        st.markdown("### Edge connection")
+        serial_port = st.text_input("COM port", value="COM5", help="Check Windows Device Manager for the ST-LINK Virtual COM Port.")
+        serial_baud = st.selectbox("Baud rate", [115200], index=0)
+        capture_seconds = st.slider("Capture duration (seconds)", 5, 60, 15, 5)
+        vref_mv = st.number_input("ADC reference voltage (mV)", min_value=1000.0, max_value=3600.0, value=3300.0, step=10.0, help="3300 mV is an initial estimate; calibrate for better accuracy.")
+        target_temp = st.slider("Reference temperature (°C)", -10.0, 100.0, 25.0, 0.5)
+        alert_delta = st.slider("Deviation warning threshold (°C)", 0.1, 10.0, 1.0, 0.1)
+        capture_pressed = st.button("Capture telemetry", type="primary", use_container_width=True)
+        clear_pressed = st.button("Clear captured data", use_container_width=True)
+
+    if clear_pressed:
+        st.session_state.pop("ms_edge_capture", None)
+        st.session_state.pop("ms_edge_capture_port", None)
+
+    if capture_pressed:
+        try:
+            with st.spinner(f"Reading {serial_port} for {capture_seconds} seconds..."):
+                telemetry = capture_telemetry(
+                    port=serial_port,
+                    duration_seconds=float(capture_seconds),
+                    baudrate=int(serial_baud),
+                    vref_mv=float(vref_mv),
+                )
+            if telemetry.empty:
+                st.warning("No MotionScore Edge frames received. Confirm firmware is flashed, the correct COM port is selected, and no other terminal owns the port.")
+            else:
+                telemetry["elapsed_s"] = (telemetry["time_ms"] - telemetry["time_ms"].iloc[0]) / 1000.0
+                st.session_state["ms_edge_capture"] = telemetry
+                st.session_state["ms_edge_capture_port"] = serial_port
+        except ImportError:
+            st.error("PySerial is not installed in this Python environment. Run: python -m pip install pyserial")
+        except Exception as exc:
+            st.error(f"Could not read {serial_port}: {exc}. Check the COM port, USB connection, firmware and that another app is not using the port.")
+
+    edge_data = st.session_state.get("ms_edge_capture")
+    if edge_data is None or edge_data.empty:
+        st.markdown("""
+        <div class="glass">
+          <div class="section-kicker">Ready to connect</div>
+          <div class="section-title">Capture your first sensor run</div>
+          <p class="small-muted">1. Flash the MotionScore Edge firmware in STM32CubeIDE. 2. Connect the board through the ST-LINK USB connector. 3. Select the ST-LINK Virtual COM Port here. 4. Click Capture telemetry.</p>
+          <p class="small-muted">Expected wire protocol: <code>MS1,&lt;time_ms&gt;,&lt;adc_raw&gt;</code>. The firmware averages 16 ADC reads and sends a sample every 500 ms.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        latest_temp = float(edge_data["temperature_c"].iloc[-1])
+        latest_voltage = float(edge_data["voltage_mv"].iloc[-1])
+        latest_raw = int(edge_data["adc_raw"].iloc[-1])
+        target_deviation = float(target_temp - latest_temp)
+        average_temp = float(edge_data["temperature_c"].mean())
+        temp_span = float(edge_data["temperature_c"].max() - edge_data["temperature_c"].min())
+
+        st.markdown('<div class="section-kicker">Hardware readout / Captured samples</div>', unsafe_allow_html=True)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Latest temperature", f"{latest_temp:.2f} °C")
+        m2.metric("Target − measured", f"{target_deviation:+.2f} °C")
+        m3.metric("Sensor output", f"{latest_voltage:.1f} mV")
+        m4.metric("Samples captured", f"{len(edge_data)}")
+
+        if abs(target_deviation) >= alert_delta:
+            st.markdown(f"<span class='status status-warn'>TEMPERATURE DEVIATION</span> &nbsp; <span class='small-muted'>The latest measured temperature differs from the selected reference by at least {alert_delta:.1f} °C. This is not a persistent-bias classifier.</span>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<span class='status status-good'>WITHIN REFERENCE BAND</span> &nbsp; <span class='small-muted'>The latest reading is within the selected ±{alert_delta:.1f} °C reference band.</span>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        ec, diag = st.columns([1.6, 1], gap="large")
+        with ec:
+            st.markdown('<div class="section-kicker">01 / Real sensor data</div><div class="section-title">Temperature over capture time</div>', unsafe_allow_html=True)
+            temp_fig = go.Figure()
+            temp_fig.add_trace(go.Scatter(
+                x=edge_data["elapsed_s"], y=edge_data["temperature_c"],
+                mode="lines+markers", name="LM35 measured",
+                line=dict(color="#67e8f9", width=2.5),
+                marker=dict(size=5), fill="tozeroy",
+                fillcolor="rgba(103,232,249,0.055)"
+            ))
+            temp_fig.add_hline(
+                y=target_temp, line_dash="dash", line_color="#a78bfa", line_width=2,
+                annotation_text="reference setpoint", annotation_font_color="#a78bfa"
+            )
+            temp_fig.update_layout(
+                height=390, margin=dict(l=10,r=15,t=20,b=10),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(6,12,25,.32)",
+                font=dict(family="Manrope",color="#dce7ff",size=11),
+                xaxis=dict(title="Elapsed time (s)",gridcolor="rgba(171,192,255,.10)",zeroline=False),
+                yaxis=dict(title="Temperature (°C)",gridcolor="rgba(171,192,255,.10)",zeroline=False),
+                legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0),
+                hovermode="x unified"
+            )
+            st.plotly_chart(temp_fig, use_container_width=True, config={"displayModeBar":False})
+        with diag:
+            st.markdown('<div class="section-kicker">02 / Sensor summary</div><div class="section-title">Run statistics</div>', unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="glass">
+              <div class="stat-label">Most recent temperature</div><div class="stat-number">{latest_temp:.2f} °C</div>
+              <div class="stat-label" style="margin-top:14px">Average captured temperature</div><div class="stat-number">{average_temp:.2f} °C</div>
+              <div class="stat-label" style="margin-top:14px">Observed temperature span</div><div class="stat-number">{temp_span:.2f} °C</div>
+              <div class="stat-label" style="margin-top:14px">Latest ADC count</div><div class="stat-number">{latest_raw} / 4095</div>
+              <p class="small-muted" style="margin-top:14px">LM35 temperature is estimated from ADC raw counts using the configured reference voltage and nominal 10 mV/°C scale factor.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('<div class="section-kicker">03 / Captured data</div><div class="section-title">Telemetry records</div>', unsafe_allow_html=True)
+        st.dataframe(edge_data, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download telemetry CSV",
+            data=edge_data.to_csv(index=False).encode("utf-8"),
+            file_name="motionscore_edge_telemetry.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        st.caption(f"Captured from {st.session_state.get('ms_edge_capture_port', 'selected serial port')}. Target deviation is a comparison to a manual reference, not a learned prediction.")
+
+    st.markdown("---")
+    st.markdown("""
+    <div class="glass">
+      <div class="section-kicker">Engineering scope</div>
+      <p class="small-muted">This hardware mode measures temperature and plots real sensor telemetry. With the currently listed hardware, there is no heater/fan actuator, so no closed-loop temperature control is performed. The simulation-trained Random Forest is intentionally not used to predict LM35 behaviour, because its training features represent a simulated plant and are not validated for this sensor-only setup.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 if not model_path.exists():
     st.markdown("""
