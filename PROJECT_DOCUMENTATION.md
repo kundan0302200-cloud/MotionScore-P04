@@ -513,3 +513,54 @@ MotionScore P04 demonstrates a complete small-scale workflow from control-system
 **Application entry point:** `app.py`  
 **Training entry point:** `train.py`  
 **Recommended demo phrase:** “MotionScore estimates how far a closed-loop system may settle from its target using early-response features, and flags predicted residual errors that exceed a configured tolerance.”
+
+# MotionScore Edge: NUCLEO-F446RE + LM35
+
+## Hardware milestone and scope
+
+The first embedded milestone adds real sensor telemetry: the STM32 samples the analog output of an LM35 with ADC1 and sends timestamped raw ADC counts through USART2 over the ST-LINK virtual COM port. The existing Streamlit dashboard has an STM32 Live Telemetry mode for capturing samples, estimating temperature, comparing the latest reading with a manually selected reference, plotting the capture, and downloading CSV.
+
+This milestone is **telemetry/monitoring only**. The available hardware has no heater/fan actuator and no driver circuit, so it does not provide closed-loop temperature regulation. The original Random Forest was trained on synthetic first-order-plant features and is intentionally not used for the LM35 hardware data until real capture data and a compatible labeled training pipeline exist.
+
+## Wiring
+
+| LM35 signal | NUCLEO-F446RE |
+|---|---|
+| +Vs | +5V |
+| Vout | Arduino A0 / PA0 / ADC1_IN0 |
+| GND | GND |
+
+The TI LM35 is specified for 4–30 V supply and nominally produces 10 mV/°C. Use the board's +5V rail for the sensor, common ground, and keep Vout connected to ADC input PA0. Check the exact sensor package's pinout before powering. A USB cable alone does not connect the sensor; suitable jumper wires are required.
+
+## Serial interface
+
+USART2 is configured for 115200 baud, 8 data bits, no parity, one stop bit. On the NUCLEO-F446RE, PA2 is USART2_TX and PA3 is USART2_RX; the onboard ST-LINK virtual COM port is exposed over the ST-LINK USB connection for supported board configuration/revision.
+
+Firmware emits this CSV-compatible line format every 500 ms:
+
+    MS1,<time_ms>,<adc_raw>
+
+The first field identifies the frame version. time_ms is the MCU tick count and adc_raw is the averaged 12-bit ADC code. The Python parser converts ADC count to estimated sensor voltage and temperature using an adjustable reference-voltage assumption. If greater accuracy is needed, measure/calibrate VDDA and compare to a trusted thermometer.
+
+## CubeIDE setup and firmware integration
+
+The files in embedded/stm32_f446re contain a MotionScore Edge HAL module and the detailed USER_CODE_INTEGRATION.md guide.
+
+- PA0: ADC1_IN0, analog mode, 12-bit/right-aligned, software-triggered single conversion.
+- ADC1: regular channel 0, a relatively long sample time (for example 84 cycles) is suitable for this slow sensor.
+- USART2: asynchronous, 115200 8-N-1, no hardware flow control, PA2/PA3.
+- Copy motionscore_edge.h and motionscore_edge.c into generated Core/Inc and Core/Src.
+- Call MotionScoreEdge_Init() after ADC/UART initialization and MotionScoreEdge_Loop() inside the existing main while loop.
+- Keep CubeMX-generated main(), clocks, peripheral handles and initializers; do not add a second main().
+
+## Live dashboard behavior
+
+Select STM32 Live Telemetry in the sidebar, choose the ST-LINK Virtual COM Port, set baud to 115200, choose an ADC-reference estimate, and click Capture telemetry. The dashboard captures a fixed time window and shows latest temperature, target-minus-measured difference, estimated sensor voltage, sample count, time plot, summary stats and CSV download.
+
+The reference temperature is not a control command. The threshold warning is based on the latest temperature difference and must not be described as learned persistent-bias detection. There is no closed-loop plant in this configuration.
+
+## Feasibility and safety
+
+This build is feasible with the NUCLEO-F446RE, LM35 and USB power for the board, but a real sensor connection also requires suitable jumper wires; a small breadboard is recommended. Do not force sensor legs into board sockets or short adjacent headers.
+
+An actual closed-loop temperature demo needs a suitable low-voltage actuator and driver, an independent over-temperature cutoff, and safe power wiring. Real ML prediction needs complete labeled plant runs: record the early features and the eventual settled output, then train/evaluate with independent runs. Do not apply the current simulation-trained model to live LM35 readings and claim prediction accuracy.
