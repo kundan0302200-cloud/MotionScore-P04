@@ -25,7 +25,7 @@ def extract_features(response: pd.DataFrame, kp: float, ki: float,
     early = response.iloc[:n]
     errors = early["error"].to_numpy(dtype=float)
     times = early["time"].to_numpy(dtype=float)
-    integral = float(np.trapz(errors, x=times)) if len(times) > 1 else 0.0
+    integral = float(np.sum((errors[:-1] + errors[1:]) * np.diff(times) / 2.0)) if len(times) > 1 else 0.0
     return {
         "initial_error": float(errors[0]),
         "early_error": float(errors[-1]),
