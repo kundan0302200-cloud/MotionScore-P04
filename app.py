@@ -245,7 +245,6 @@ with c_left:
     st.plotly_chart(ctrl, use_container_width=True, config={"displayModeBar":False})
 with c_right:
     st.markdown('<div class="section-kicker">04 / Feature inspection</div><div class="section-title">Early-window model inputs</div>', unsafe_allow_html=True)
-    st.markdown('<div class="glass"><p class="small-muted">These features are calculated from the first 30% of the response. The model does not receive the true final output as an input.</p>', unsafe_allow_html=True)
     feature_labels = {
         "initial_error":"Initial error", "early_error":"Error at cutoff",
         "error_integral_early":"Accumulated early error", "mean_abs_error_early":"Mean absolute error",
@@ -253,10 +252,17 @@ with c_right:
         "kp":"Proportional gain (Kp)", "ki":"Integral gain (Ki)",
         "plant_gain":"Plant gain", "time_constant":"Time constant",
     }
+    feature_rows = []
     for key, label_text in feature_labels.items():
         value = features[key]
-        st.markdown(f"<div style='display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(171,192,255,.10);padding:7px 0'><span class='small-muted'>{label_text}</span><span style='font-family:DM Mono,monospace;color:#e3efff'>{value:+.4f}</span></div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        feature_rows.append(
+            f"<div style='display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(171,192,255,.10);padding:7px 0'><span class='small-muted'>{label_text}</span><span style='font-family:DM Mono,monospace;color:#e3efff'>{value:+.4f}</span></div>"
+        )
+    feature_card = (
+        '<div class="glass"><p class="small-muted">These features are calculated from the first 30% of the response. The model does not receive the true final output as an input.</p>'
+        + "".join(feature_rows) + "</div>"
+    )
+    st.markdown(feature_card, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("""
