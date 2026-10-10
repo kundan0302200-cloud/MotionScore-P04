@@ -1,0 +1,25 @@
+MotionScore Edge — integration snippet for generated main.c
+=============================================================
+
+1. Add this in the existing USER CODE BEGIN Includes section:
+
+    #include "motionscore_edge.h"
+
+2. In main(), after the generated initialization calls for ADC1 and USART2
+   (and after MX_GPIO_Init()), add this in USER CODE BEGIN 2:
+
+    MotionScoreEdge_Init();
+
+3. Inside the existing while (1) loop, add this call in the USER CODE
+   section of the loop:
+
+    MotionScoreEdge_Loop();
+
+Do not add a second main() function. Keep the clock configuration, peripheral
+initializers, interrupt handlers and generated code from STM32CubeIDE.
+
+Expected generated peripheral handles:
+    ADC_HandleTypeDef hadc1;
+    UART_HandleTypeDef huart2;
+
+If CubeMX generated different handle names, adjust motionscore_edge.c to match.
