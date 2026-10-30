@@ -135,3 +135,15 @@ MS1,<time_ms>,<adc_raw>
 The Python side converts the 12-bit ADC count using an adjustable ADC-reference estimate, then applies the LM35 nominal 10 mV/°C transfer scale. Calibrate reference voltage to improve accuracy.
 
 See [MotionScore Edge integration guide](embedded/stm32_f446re/USER_CODE_INTEGRATION.md) for wiring, CubeMX settings, firmware integration, and scope/limitations.
+
+
+## MotionScore Edge — Wokwi simulation bridge
+
+A separate **Wokwi Simulation** dashboard mode now receives `MS1,<time_ms>,<adc_raw>` frames from a locally running NUCLEO-C031C6 Wokwi simulation over RFC2217. The potentiometer ADC value is mapped to a simulated setpoint (20–50 by default); it is **not** converted to LM35 temperature. Python then calls the existing PI plant simulator, original 11-feature extractor, and saved Random Forest to generate a predicted signed steady-state error. The synthetic plant's final error is shown as a reference only.
+
+- Circuit: [wokwi/diagram.json](wokwi/diagram.json)
+- Local simulator, HAL setup and dashboard instructions: [wokwi/README.md](wokwi/README.md)
+- RFC2217 configuration template: [wokwi/wokwi.toml.example](wokwi/wokwi.toml.example)
+- Python bridge: [motionscore/wokwi_edge.py](motionscore/wokwi_edge.py)
+
+Wokwi's supported board is NUCLEO-C031C6; this is a simulation substitute, not the NUCLEO-F446RE. The C031 ADC/UART path exercises serial integration only. Plant dynamics remain synthetic in Python. The existing Random Forest and model feature schema are unchanged. This is not physical sensor validation or evidence of model accuracy on a real plant. See the Wokwi guide for the exact setup and limitations.
