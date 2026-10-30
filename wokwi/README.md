@@ -78,7 +78,7 @@ for (uint32_t i = 0U; i < 16U; ++i) {
 if (valid) {
     uint16_t average = (uint16_t)(sum / 16U);
     char frame[48];
-    int n = snprintf(frame, sizeof(frame), "MS1,%lu,%u\\r\\n",
+    int n = snprintf(frame, sizeof(frame), "MS1,%lu,%u\r\n",
                      (unsigned long)HAL_GetTick(), (unsigned int)average);
     if (n > 0 && (size_t)n < sizeof(frame)) {
         (void)HAL_UART_Transmit(&huart2, (uint8_t *)frame,
