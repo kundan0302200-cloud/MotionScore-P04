@@ -11,7 +11,7 @@ class FakeRegressor:
         return np.array([0.75])
 
 def test_parses_ms1_frame():
-    assert parse_wokwi_frame("MS1,1500,2050\\r\\n") == {"time_ms":1500,"adc_raw":2050}
+    assert parse_wokwi_frame("MS1,1500,2050\r\n") == {"time_ms":1500,"adc_raw":2050}
 
 def test_rejects_bad_frames():
     assert parse_wokwi_frame("boot") is None
