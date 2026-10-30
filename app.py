@@ -1,4 +1,4 @@
-"""Glass-prism Streamlit dashboard for MotionScore P04."""
+"""Minimal prism-inspired Streamlit dashboard for MotionScore P04."""
 from pathlib import Path
 import joblib
 import plotly.graph_objects as go
@@ -16,87 +16,75 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ---------- Premium glass-prism visual system ----------
+# ---------- Minimal prism-inspired visual system ----------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
-:root { --bg:#070b16; --panel:rgba(16,25,47,.70); --line:rgba(171,192,255,.17);
-        --muted:#9aa8c7; --white:#f4f7ff; --cyan:#67e8f9; --violet:#a78bfa; --mint:#6ee7b7; }
+:root { --bg:#0b0e13; --panel:#11161d; --line:#252d37;
+        --muted:#9ba5b2; --white:#f1f4f7; --cyan:#74d6d0; --violet:#b4a4e8; --mint:#8bd6b0; }
 html, body, [class*="css"] { font-family:'Manrope', sans-serif; }
 .stApp {
- background:
-  radial-gradient(ellipse at 12% 0%, rgba(72,75,180,.26), transparent 34%),
-  radial-gradient(ellipse at 90% 12%, rgba(30,166,196,.16), transparent 29%),
-  radial-gradient(ellipse at 70% 90%, rgba(128,72,205,.12), transparent 34%),
-  #070b16;
+ background:var(--bg);
  color:var(--white);
 }
-[data-testid="stHeader"] { background:rgba(7,11,22,.68); }
+[data-testid="stHeader"] { background:var(--bg); }
 [data-testid="stToolbar"] { right:1rem; }
-.block-container { max-width:1450px; padding-top:2.1rem; padding-bottom:3.5rem; }
+.block-container { max-width:1380px; padding-top:1.7rem; padding-bottom:3rem; }
 section[data-testid="stSidebar"] {
- background:linear-gradient(160deg,rgba(18,27,52,.94),rgba(9,15,30,.96));
+ background:#0e1218;
  border-right:1px solid var(--line);
 }
-section[data-testid="stSidebar"] * { color:#e9efff; }
+section[data-testid="stSidebar"] * { color:#e3e8ed; }
 section[data-testid="stSidebar"] [data-testid="stSlider"] { padding-top:.2rem; }
 h1,h2,h3 { letter-spacing:-.035em; }
-p, li { color:#c4cee5; }
+p, li { color:#b8c1cb; }
 a { color:var(--cyan)!important; }
 [data-testid="stMetric"] {
- background:linear-gradient(135deg,rgba(27,42,73,.80),rgba(14,22,42,.68));
- border:1px solid var(--line); border-radius:18px; padding:18px 20px;
- box-shadow:0 16px 40px rgba(0,0,0,.16); backdrop-filter:blur(18px);
+ background:var(--panel);
+ border:1px solid var(--line); border-radius:12px; padding:16px 18px;
 }
-[data-testid="stMetricLabel"] { color:#a9b8d7!important; font-size:.78rem!important; }
-[data-testid="stMetricValue"] { color:#f7f9ff!important; font-weight:800; }
-div[data-testid="stAlert"] { border-radius:14px; border:1px solid var(--line); }
-.stButton button { border-radius:12px; border:1px solid rgba(103,232,249,.4); }
+ [data-testid="stMetricLabel"] { color:#a8b1bc!important; font-size:.78rem!important; }
+[data-testid="stMetricValue"] { color:var(--white)!important; font-weight:700; }
+div[data-testid="stAlert"] { border-radius:10px; border:1px solid var(--line); }
+.stButton button { border-radius:8px; border:1px solid #3a4652; }
 .glass {
- background:linear-gradient(135deg,rgba(31,46,80,.76),rgba(13,21,40,.70));
- border:1px solid rgba(171,192,255,.18); border-radius:22px;
- padding:22px 24px; box-shadow:0 18px 48px rgba(0,0,0,.20);
- backdrop-filter:blur(20px); position:relative; overflow:hidden;
+ background:var(--panel);
+ border:1px solid var(--line); border-radius:12px;
+ padding:20px 22px; position:relative; overflow:hidden;
 }
 .glass:before {
- content:""; position:absolute; top:0; left:0; right:0; height:1px;
- background:linear-gradient(90deg,transparent,rgba(103,232,249,.7),rgba(167,139,250,.6),transparent);
+ content:""; position:absolute; top:0; left:0; width:64px; height:2px;
+ background:linear-gradient(90deg,var(--cyan),var(--violet));
 }
-.hero { padding:28px 30px 25px; margin-bottom:20px; position:relative; overflow:hidden; }
-.hero:after {
- content:""; position:absolute; width:360px; height:360px; right:-80px; top:-210px;
- background:conic-gradient(from 30deg,rgba(103,232,249,.15),rgba(167,139,250,.20),transparent,rgba(103,232,249,.10));
- filter:blur(3px); transform:rotate(18deg); pointer-events:none;
-}
-.eyebrow { color:var(--cyan); font-family:'DM Mono',monospace; letter-spacing:.17em;
+.hero { padding:24px 26px 22px; margin-bottom:18px; }
+.eyebrow { color:var(--cyan); font-family:'DM Mono',monospace; letter-spacing:.12em;
  text-transform:uppercase; font-size:.70rem; margin-bottom:10px; }
 .brand { font-size:clamp(2.4rem,4.5vw,4.3rem); font-weight:800; letter-spacing:-.075em;
  line-height:1.0; margin:0; color:#f8faff; }
-.brand span { background:linear-gradient(100deg,#67e8f9 10%,#a78bfa 58%,#6ee7b7 100%);
- -webkit-background-clip:text; background-clip:text; color:transparent; }
-.hero-sub { max-width:760px; margin:14px 0 0; font-size:1rem; color:#bdc9e4; line-height:1.7; }
-.pill-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.brand span { color:var(--cyan); }
+.hero-sub { max-width:760px; margin:12px 0 0; font-size:.96rem; color:#adb7c2; line-height:1.65; }
+.pill-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:15px; }
 .pill { display:inline-block; font-family:'DM Mono',monospace; font-size:.68rem;
- color:#d7e8ff; background:rgba(103,232,249,.07); border:1px solid rgba(103,232,249,.18);
- padding:7px 10px; border-radius:999px; }
-.section-kicker { color:#7dd3fc; font-family:'DM Mono',monospace; text-transform:uppercase;
- letter-spacing:.16em; font-size:.69rem; margin:8px 0 7px; }
-.section-title { color:#f0f5ff; font-size:1.35rem; font-weight:800; margin:0 0 14px; letter-spacing:-.04em; }
-.small-muted { color:#9aa8c7; font-size:.84rem; line-height:1.65; }
-.stat-label { color:#9aa8c7; font-size:.75rem; letter-spacing:.08em; text-transform:uppercase; }
-.stat-number { font-size:1.8rem; font-weight:800; letter-spacing:-.045em; color:#f7f9ff; margin-top:4px; }
-.stat-note { color:#aab9d8; font-size:.8rem; margin-top:4px; }
+ color:#bbc5ce; background:#151b22; border:1px solid #2a333d;
+ padding:6px 9px; border-radius:6px; }
+.section-kicker { color:var(--cyan); font-family:'DM Mono',monospace; text-transform:uppercase;
+ letter-spacing:.12em; font-size:.67rem; margin:8px 0 7px; }
+.section-title { color:#e9edf1; font-size:1.28rem; font-weight:700; margin:0 0 14px; letter-spacing:-.035em; }
+.small-muted { color:var(--muted); font-size:.84rem; line-height:1.65; }
+.stat-label { color:var(--muted); font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; }
+.stat-number { font-size:1.7rem; font-weight:700; letter-spacing:-.04em; color:var(--white); margin-top:4px; }
+.stat-note { color:#aab3bd; font-size:.8rem; margin-top:4px; }
 .status { display:inline-block; border-radius:999px; padding:6px 10px; font-size:.72rem;
  font-family:'DM Mono',monospace; }
-.status-good { color:#a7f3d0; border:1px solid rgba(110,231,183,.35); background:rgba(16,185,129,.10); }
-.status-warn { color:#fde68a; border:1px solid rgba(251,191,36,.35); background:rgba(245,158,11,.10); }
-div[data-testid="stPlotlyChart"] { border:1px solid rgba(171,192,255,.13); border-radius:18px; overflow:hidden; }
-hr { border-color:rgba(171,192,255,.13)!important; }
+.status-good { color:#9fe0bb; border:1px solid #315542; background:#14241b; }
+.status-warn { color:#e9c982; border:1px solid #5a4b2c; background:#282116; }
+div[data-testid="stPlotlyChart"] { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+hr { border-color:var(--line)!important; }
 footer { visibility:hidden; }
 @media (max-width:760px) {
  .block-container { padding-left:1rem; padding-right:1rem; }
- .hero { padding:22px 20px; }
- .glass { padding:18px; border-radius:17px; }
+ .hero { padding:20px 18px; }
+ .glass { padding:17px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -112,7 +100,7 @@ st.markdown("""
   <h1 class="brand">Motion<span>Score</span></h1>
   <p class="hero-sub">Steady-State Accuracy Predictor — estimate the residual error a controlled system may retain after settling. Explore how PI control, plant dynamics and disturbances shape the response.</p>
   <div class="pill-row">
-    <span class="pill">◈ GLASS PRISM UI</span>
+    <span class="pill">PRISM INSPIRED</span>
     <span class="pill">RANDOM FOREST REGRESSION</span>
     <span class="pill">SYNTHETIC PLANT LAB</span>
     <span class="pill">PERSISTENT BIAS CHECK</span>

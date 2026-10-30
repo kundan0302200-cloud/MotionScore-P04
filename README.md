@@ -4,7 +4,7 @@ A control-systems + machine-learning proof of concept that estimates the eventua
 
 ## Product preview
 
-The Streamlit interface uses a dark glass-prism visual system with live control sliders, KPI cards, response/control-effort plots, a bias-threshold monitor, and an early-feature inspector.
+The Streamlit interface uses a minimal dark prism-inspired visual system with live control sliders, KPI cards, response/control-effort plots, a bias-threshold monitor, and an early-feature inspector.
 
 ## What it does
 
@@ -40,7 +40,7 @@ On macOS/Linux, activate with `source .venv/bin/activate`.
 User / operator
    │ adjusts setpoint, controller gains and plant parameters
    ▼
-Streamlit glass-prism dashboard (app.py)
+Streamlit prism-inspired dashboard (app.py)
    │
    ├── simulate_response() ──► synthetic PI + first-order plant time series
    │                                │
