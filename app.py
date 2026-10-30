@@ -8,6 +8,7 @@ from motionscore.simulation import simulate_response
 from motionscore.features import extract_features, FEATURE_COLUMNS
 from motionscore.modeling import MODEL_PATH
 from motionscore.serial_telemetry import capture_telemetry
+from motionscore.wokwi_edge import capture_wokwi_predictions
 
 st.set_page_config(
     page_title="MotionScore | Steady-State Intelligence",
@@ -113,9 +114,124 @@ with st.sidebar:
     st.markdown("### ◈ Operating mode")
     operating_mode = st.radio(
         "Choose data source",
-        ["Simulation Lab", "STM32 Live Telemetry"],
+        ["Simulation Lab", "Wokwi Simulation", "STM32 Live Telemetry"],
         index=0,
     )
+
+if operating_mode == "Wokwi Simulation":
+    st.markdown("""
+    <div class="glass">
+      <div class="eyebrow">MotionScore Edge / Wokwi simulation</div>
+      <h2 style="margin:0">Potentiometer → PI plant → ML prediction</h2>
+      <p class="hero-sub">Receive simulated ADC frames from a Wokwi NUCLEO-C031C6. The potentiometer selects a simulated setpoint; MotionScore then runs its existing synthetic PI plant, extracts the original 11 features, and predicts steady-state error.</p>
+      <div class="pill-row">
+        <span class="pill">NUCLEO-C031C6 SIMULATOR</span>
+        <span class="pill">POTENTIOMETER → A0</span>
+        <span class="pill">RFC2217 · 4000</span>
+        <span class="pill">EXISTING RANDOM FOREST</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.sidebar:
+        st.markdown("### Wokwi serial connection")
+        wokwi_url = st.text_input(
+            "RFC2217 URL", value="rfc2217://localhost:4000",
+            help="Wokwi for VS Code must be running with rfc2217ServerPort = 4000."
+        )
+        wokwi_baud = st.selectbox("Baud rate", [115200], index=0)
+        wokwi_duration = st.slider("Capture duration (seconds)", 5, 120, 20, 5)
+        min_sp = st.number_input("Minimum simulated setpoint", value=20.0, step=1.0)
+        max_sp = st.number_input("Maximum simulated setpoint", value=50.0, step=1.0)
+        capture_wokwi = st.button("Capture Wokwi predictions", type="primary", use_container_width=True)
+        clear_wokwi = st.button("Clear Wokwi capture", use_container_width=True)
+
+    if clear_wokwi:
+        st.session_state.pop("ms_wokwi_capture", None)
+
+    if capture_wokwi:
+        if max_sp <= min_sp:
+            st.error("Maximum simulated setpoint must be greater than minimum.")
+        else:
+            try:
+                with st.spinner("Receiving Wokwi serial frames and running MotionScore predictions..."):
+                    wokwi_data = capture_wokwi_predictions(
+                        url=wokwi_url,
+                        duration_seconds=float(wokwi_duration),
+                        baudrate=int(wokwi_baud),
+                        minimum_setpoint=float(min_sp),
+                        maximum_setpoint=float(max_sp),
+                    )
+                if wokwi_data.empty:
+                    st.warning("No valid MS1 frames received. Check that Wokwi for VS Code is running, the simulator tab is visible, the RFC2217 port is 4000, and the firmware is emitting MS1 frames.")
+                else:
+                    wokwi_data["elapsed_s"] = (
+                        wokwi_data["time_ms"] - wokwi_data["time_ms"].iloc[0]
+                    ) / 1000.0
+                    st.session_state["ms_wokwi_capture"] = wokwi_data
+            except FileNotFoundError as exc:
+                st.error(str(exc))
+            except ImportError:
+                st.error("PySerial is missing. Run: python -m pip install pyserial")
+            except Exception as exc:
+                st.error(f"Wokwi capture failed: {exc}. Confirm the simulator is running and port 4000 is available.")
+
+    wokwi_data = st.session_state.get("ms_wokwi_capture")
+    if wokwi_data is None or wokwi_data.empty:
+        st.markdown("""
+        <div class="glass">
+          <div class="section-kicker">Ready for Wokwi</div>
+          <div class="section-title">Start the local simulator, then capture a run</div>
+          <p class="small-muted">1. Open the official STM32 HAL C031 project in VS Code. 2. Configure wokwi.toml with rfc2217ServerPort = 4000. 3. Start Wokwi: Start Simulator. 4. Keep its simulator tab visible. 5. Rotate the potentiometer during the capture.</p>
+          <p class="small-muted">Expected serial frame: <code>MS1,&lt;time_ms&gt;,&lt;adc_raw&gt;</code>. This Wokwi path uses the potentiometer as an abstract setpoint dial, not as an LM35 temperature sensor.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        last = wokwi_data.iloc[-1]
+        st.markdown('<div class="section-kicker">Live input bridge / captured predictions</div>', unsafe_allow_html=True)
+        wm1, wm2, wm3, wm4 = st.columns(4)
+        wm1.metric("Latest ADC count", f"{int(last['adc_raw'])} / 4095")
+        wm2.metric("Selected simulated setpoint", f"{last['simulated_setpoint']:.2f}")
+        wm3.metric("Predicted steady-state error", f"{last['predicted_steady_state_error']:+.3f}")
+        wm4.metric("Valid frames", f"{len(wokwi_data)}")
+
+        chart = go.Figure()
+        chart.add_trace(go.Scatter(
+            x=wokwi_data["elapsed_s"], y=wokwi_data["predicted_steady_state_error"],
+            mode="lines+markers", name="Random Forest prediction",
+            line=dict(color="#67e8f9", width=2.5), marker=dict(size=5)))
+        chart.add_trace(go.Scatter(
+            x=wokwi_data["elapsed_s"], y=wokwi_data["synthetic_reference_error"],
+            mode="lines+markers", name="Synthetic plant reference",
+            line=dict(color="#a78bfa", width=2, dash="dash"), marker=dict(size=4)))
+        chart.update_layout(
+            height=380, margin=dict(l=10,r=15,t=15,b=10),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(6,12,25,.32)",
+            font=dict(family="Manrope",color="#dce7ff",size=11),
+            xaxis=dict(title="Elapsed time (s)",gridcolor="rgba(171,192,255,.10)"),
+            yaxis=dict(title="Signed steady-state error",gridcolor="rgba(171,192,255,.10)"),
+            legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0),
+            hovermode="x unified")
+        st.plotly_chart(chart, use_container_width=True, config={"displayModeBar":False})
+
+        st.markdown('<div class="section-kicker">Captured serial + model records</div>', unsafe_allow_html=True)
+        st.dataframe(wokwi_data, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download Wokwi prediction CSV",
+            data=wokwi_data.to_csv(index=False).encode("utf-8"),
+            file_name="motionscore_wokwi_predictions.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        st.caption("The predicted value comes from the existing Random Forest and original feature pipeline. The reference final error is generated by the synthetic PI simulator, not measured from hardware.")
+
+    st.markdown("""
+    <div class="glass">
+      <div class="section-kicker">Simulation scope / Important</div>
+      <p class="small-muted">The NUCLEO-C031C6 is a Wokwi substitute, not your NUCLEO-F446RE. The potentiometer ADC count is mapped to a simulated setpoint, not converted to temperature. Python simulates the PI-controlled plant and reference response. This verifies serial-to-model integration, not real LM35 accuracy or model performance on a physical plant.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 if operating_mode == "STM32 Live Telemetry":
     st.markdown("""
