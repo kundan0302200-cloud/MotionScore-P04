@@ -564,3 +564,38 @@ The reference temperature is not a control command. The threshold warning is bas
 This build is feasible with the NUCLEO-F446RE, LM35 and USB power for the board, but a real sensor connection also requires suitable jumper wires; a small breadboard is recommended. Do not force sensor legs into board sockets or short adjacent headers.
 
 An actual closed-loop temperature demo needs a suitable low-voltage actuator and driver, an independent over-temperature cutoff, and safe power wiring. Real ML prediction needs complete labeled plant runs: record the early features and the eventual settled output, then train/evaluate with independent runs. Do not apply the current simulation-trained model to live LM35 readings and claim prediction accuracy.
+
+
+---
+
+## Wokwi simulation extension — serial input to existing ML pipeline
+
+The Wokwi demo adds a simulated embedded-input path without changing the existing P04 model:
+
+```text
+Wokwi NUCLEO-C031C6 + potentiometer
+  -> 12-bit ADC -> USART2 / MS1 frame -> RFC2217 TCP bridge
+  -> Python parse -> potentiometer count mapped to simulated setpoint
+  -> existing PI first-order plant simulation
+  -> existing first-30%-window FEATURE_COLUMNS extraction
+  -> existing saved RandomForestRegressor
+  -> predicted signed steady-state error in Streamlit
+```
+
+The model continues to receive the same 11 columns and order defined in `motionscore/features.py`. No retraining is required to demonstrate this integration, provided the trained bundle from `python train.py` exists. The potentiometer provides an adjustable input to the demonstration, not a physical process measurement. The plant response and its reference final error are simulated in Python.
+
+### What the demonstration validates
+
+- Wokwi's simulated C031 ADC can provide a changing analog input.
+- STM32 firmware can frame that input using the existing MS1 serial protocol.
+- The local Wokwi VS Code RFC2217 bridge can transport serial frames to Python.
+- Python can parse frames and route the resulting setpoint into the existing model feature pipeline.
+
+### What it does not validate
+
+- NUCLEO-F446RE-specific firmware, pinout, ADC characteristics or UART timing.
+- LM35 electrical behaviour or temperature calibration.
+- A real physical PI-controlled plant, its actuator, or any closed-loop hardware control.
+- Random Forest predictive performance on measured hardware data. The model is still evaluated on synthetic plant responses created by the original simulator.
+
+The detailed setup is maintained in [wokwi/README.md](wokwi/README.md). Keep this simulation extension distinct from the real-board instructions in `embedded/stm32_f446re/USER_CODE_INTEGRATION.md`.
