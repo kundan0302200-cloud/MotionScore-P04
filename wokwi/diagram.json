@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "author": "MotionScore",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-st-nucleo-c031c6",
+      "id": "nucleo",
+      "top": -37.71,
+      "left": -264.45,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot1",
+      "top": 150,
+      "left": 100,
+      "attrs": {
+        "value": "512"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "$serialMonitor:TX",
+      "nucleo:PA3",
+      "",
+      []
+    ],
+    [
+      "$serialMonitor:RX",
+      "nucleo:PA2",
+      "",
+      []
+    ],
+    [
+      "nucleo:GND.5",
+      "pot1:GND",
+      "black",
+      [
+        "h-40",
+        "v160",
+        "h140"
+      ]
+    ],
+    [
+      "nucleo:3V3.2",
+      "pot1:VCC",
+      "red",
+      [
+        "h-30",
+        "v180",
+        "h130"
+      ]
+    ],
+    [
+      "nucleo:A0",
+      "pot1:SIG",
+      "green",
+      [
+        "h70",
+        "v100"
+      ]
+    ]
+  ],
+  "dependencies": {}
+}
